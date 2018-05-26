@@ -1,0 +1,3 @@
+git+git://github.com/danielhomola/boruta_py.git@c9d9b2ef6b9164b8e504462bac23e663ae06e2b0#egg=Boruta
+
+-e .

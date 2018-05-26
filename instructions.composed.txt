@@ -1,0 +1,193 @@
+####
+Latest EPIC/COMPOSED
+-- this version uses a holdout proportion to actually do true prediction and not just train/test classification
+####
+
+.. contents::
+
+##### UPDATING to the new EPIC (see below for first install) #####
+git status
+# check to see if you you have local changes. If so and you want to save them:
+git commit -a
+# If not
+git checkout HEAD -- .
+# Now you have a clean local repository, so you can pull changes from a remote branch. 
+# First make sure you have a remote set up that pulls from my grid directory - check
+git remote -v 
+# If that doesn't show my dir as remote then do
+git remote add origin /ifshome/briedel/Epic_Tools
+# Make sure he's on the master branch
+git checkout master 
+# Pull all git changes from my repo
+git fetch origin  
+# Rebase your master changes on top of whatever is in my master
+git rebase origin/master 
+# Make a new branch and set it to be the same as what's in my epic2.0 branch
+git checkout -b epic2.0 origin/epic2.0 
+
+
+# After switching to this branch if you need to pull changes from my branch in the future 
+# !! Assuming you are on epic2.0 and want to pull changes from the remote epic2.0
+git pull origin epic2.0
+###### Run #####
+# If running a single file run with 
+# bash scripts/submit_parpool_single_file_qsub_master.sh
+# Make sure the correct python file is called in the submit script and that the parpool file is correct
+
+###### NOTES #####
+# You can't have missing values, so please make sure to fix that if you do (imputation or remove)!!! 
+# You may not see quite as good of results as the old-new version of EPIC - this is very 
+# likely because of previous overfitting - as can now be seen in instances with high test
+# results and chance validation results
+# Also previously it was not possible to average across folds within a repeat so it was always
+# Just returning the best over the k folds and then you were averaging the bests across repeats
+# Again making things look more optimistic than it should
+# With this latest version I can actually average across folds because they are consistent (use the same feature sets)
+#################
+# I was lazy and didn't print an averaging function for the results, so you'll have to copy 
+# paste the values you get into something like excel to get those if running a single set of params
+# Otherwise use something like the Data_munge_GetBest_Results.py file after everything is finished running
+
+##### Params to adjust #####
+# You can submit jobs with submit_parpool_qsub_final.sh with the script name inside the file (eg submit_parpool_final.sh)
+# Make sure the script it calls (submit_parpool_final.sh) is calling the correct script (eg parpool_final.py)
+# You'll need to change scripts/submit_parpool_qsub_final.sh for your settings of 
+# c_stat, max_combinatorial, min_diff_thresh, 
+# And to change parpool_final.py for the num_repeats, num_folds
+# Keep data_args': {'covariate': 'Sex'} if you want to include sex as a classification/prediction param or use an alternative binary variable
+# input your results_dir, output_dir, list_of_files, and write file (the with open line)
+# In the consts.py file you can change the prediction_holdout if you want (common splits are 70/30, 60/40, or 50/50)
+
+
+*************************
+Installation Instructions
+*************************
+
+Install requires a python3 environment. I recommend using anaconda for linux, once
+anaconda is installed, I recommend making an environment to use for epic
+analysis, and ipython3 to use debugging capabilities::
+
+   conda update conda
+   conda install pip
+   conda create --name epic_analysis python=3
+   conda install ipython3
+   source activate epic_analysis
+
+Once conda is installed, create your local epic library by checking out epic
+from brandy's ifshome::
+
+   git clone /ifshome/briedel/Epic_Tools/ my_epic_branch
+
+Make a branch to do your local development. Replace ``my_epic_branch``
+with a meaningful name for your analysis project::
+
+   cd my_epic_tools
+   git checkout -b my_epic_branch
+
+Install epic tools dependencies::
+
+   pip install -r requirements.txt
+
+You may have to run pip install scikitlearn if you get an error about that module
+*************************
+Parameters
+*************************
+In your_script_name.py you need to set: the number of folds, classifier type, 
+filepath to your csv, first/last column names of your csv
+
+In your data.py in the "epic" dir, you need to set: prefixes of all variable classes on line 132
+This is on the 'assert self.prefixes.issubset' line - if your feature type has the prefix 'VL_ROI' and
+'Thk_ROI' then you would add 'VL' and 'Thk' - not ID or Group
+Also set the SVM baseline cutoff threshold 'cutoff_threshold' - you can also set this to 0
+
+In your epic.py in the "epic" dir, you need to set: the c statistic to optimize your results
+This is on the 'clf = svm.LinearSVC' line
+
+In your freesurfer.py script (or whatever it's called) there is a QC parameter in epic.py line 308 onwards
+That will prevent you from being able to run with more folds than you have data/group size for
+YOU NEED TO HAVE AT LEAST 3 DX/CN PEOPLE IN EACH FOLD! If not, reduce folds! 
+
+*************************
+Running Instructions
+*************************
+Make a script in the scripts folder, you can use one of the existing
+ones as a template. If you are using a conda environment, you can't just
+include ``#!/usr/bin/env python`` as the first line to run your script.
+Instead, activate your python 3 environment, and then run::
+
+   source activate epic_analysis
+   ipython3 --pdb
+   %run filepath/scripts/your_script_name.py
+This will make sure to use the local version of python that's located in your
+working python environment.
+
+When you are finished running analyses, to return to the normal environment, 
+hit control-d enter and then 
+
+   source deactivate epic_analysis
+
+=========
+Debugging
+=========
+If/when it reaches an uncaught exception ipython3 will jump into debug mode. 
+If/when that happens, here's the basics you need
+to know in order to figure out what went wrong.
+
+* You can list out the surrounding lines of code if you type ``l``
+* You can travel up the call stack by typing ``u``
+* You can travel back down the call stack by typing ``d``
+* You can list out values of variables that are located at your current level
+  of the call stack by typing the variable name.
+* You quit the debugger by typing ``q``
+
+Those are about the only commands that I use. If you want to learn more,
+check out the `pdb docs`_.
+
+.. _pdb docs: https://docs.python.org/3.5/library/pdb.html
+
+
+*********************************************
+Saving Your Work and Sharing it with your Lab
+*********************************************
+
+Make sure to run::
+
+   git commit -a
+
+Every once in a while in order to version control your work. If you make some
+ interesting changes to epic tools and you want to share, push your branch
+ back to Brandy's repository so she can merge your changes with the master
+ branch. To do this, run the following command after running git commit::
+
+   git push origin my_epic_branch
+
+
+********
+Misc
+********
+
+If you want to run multiple verions or csvs you can call them in separate terminal 
+tabs after activating epic_tools and opening ipython3 with (you can do this in 1 tab, 
+but they won't run in parallel):
+
+%run Epic_Tools/scripts/freesurfer_analysis2.py /ifs/loni/faculty/thompson/four_d/
+   briedel/ABIDE/MDD_ISBI/MDD_full_matched_21.csv
+%run Epic_Tools/scripts/freesurfer_analysis3.py /ifs/loni/faculty/thompson/four_d/
+   briedel/ABIDE/MDD_ISBI/MDD_full_matched_21.csv
+
+.. toctree:: Contents
+
+   about_epic
+   epic_v2
+
+********
+Updates
+********
+Added squared-hinge loss function to SVM
+-- this will make SVM more sensitive to large outliers
+Added random state to ensure consistency
+
+
+
+
+

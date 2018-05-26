@@ -1,0 +1,10 @@
+.DS_Store
+.idea/
+*.egg-info/
+*~
+*.pyc
+doc/build/*
+build/*
+*.log
+Results*
+*.csv
