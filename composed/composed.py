@@ -282,14 +282,26 @@ class Composed:
                                             n_estimators=self.n_estimators,
                                             max_depth=self.max_depth, # Needs to be high 5+ for ROI/brain distribution consideratons
                                             criterion='friedman_mse',
-                                            min_samples_split=8,
-                                            min_samples_leaf=2,
+                                            min_samples_split=15,
+                                            min_samples_leaf=5,
                                             min_weight_fraction_leaf=0,
                                             subsample=0.95, # High to encourage sampling across all ages
                                             max_features=0.65,
                                             max_leaf_nodes=None,
                                             min_impurity_decrease=0.0000001,
-                                            alpha=0.9,
+                                            alpha=0.1,  # Use the alpha% quantile
+                                                        # in loss in order to
+                                                        # weight towards
+                                                        # overpredicting Y.
+                                                        # calculates loss based
+                                                        # on huber loss of the
+                                                        # alpha quantile, where
+                                                        # the quantile array is
+                                                        # taken from y_actual -
+                                                        # y_pred. Therefore this
+                                                        # weights towards
+                                                        # negative y_actual -
+                                                        # y_pred results.
                                             init=None,
                                             verbose=0,
                                             warm_start=False,
@@ -452,4 +464,5 @@ class Composed:
         if coef_list is not None:
             print("\nFeature names and classifier coefficients\n"
                   "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n", file=self.log)
-            print("{}".format('\n'.join(["{}: {}".format(k, v) for k, v in coef_list.items()])), file=self.log)
+            sorted_coefs = sorted(list(coef_list.items()), key=lambda x: x[1])
+            print("{}".format('\n'.join(["{}: {}".format(k, v) for k, v in sorted_coefs])), file=self.log)

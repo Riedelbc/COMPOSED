@@ -9,15 +9,14 @@ data_name = "BrainAge"
 base = '/muxley/code/composed/'
 results_dir = 'Results_Residuals'
 
-
-max_combinatorial_array=(16, ) # 14)
-learning_rate_array=(0.05, ) # 1, 0.05)
-min_zdiff_thresh_array=(1.05, ) # 1.1)
-max_depth_array=(4, ) #8, 10)
+max_combinatorial_array=(16,)
+learning_rate_array=(0.12,) # 0.06, 0.08, .1, 0.12, 0.05)
+min_zdiff_thresh_array=(1.05,) # 1.02, 1.1)
+max_depth_array=(5, ) #8, 10)
 
 max_merges = 8.0
 min_tdiff_thresh = 1.08
-n_estimators = 500
+n_estimators = 80
 
 job_list = []
 for _max_combinatorial in max_combinatorial_array:
@@ -27,7 +26,7 @@ for _max_combinatorial in max_combinatorial_array:
                 outdirname = "{}_maxComb{}_learningRate{}_minZDiff{}_maxDepth{}".format(
                     data_name, _max_combinatorial,  _learning_rate, _min_zdiff_thresh, _max_depth
                 )
-                out_dir = os.path.join(base, 'outputs2', outdirname)
+                out_dir = os.path.join(base, 'outputs20180609_80trees_15samsplit_TestTrain_huber-alpha0.1', outdirname)
                 if not os.path.exists(out_dir):
                     os.makedirs(out_dir)
                 job_list.append({'max_combinatorial': _max_combinatorial,
@@ -44,6 +43,7 @@ for _max_combinatorial in max_combinatorial_array:
                                  'classifier_name': "Gradient Boosting Regressor",
                                  'data_type': 'freesurfer',
                                  'n_estimators': n_estimators,
+                                 'ncpus': 20,
                                  'data_type_args': {
                                      'prefixes': ["Thk", "SA", "VL"],
                                      'group': 'Age',

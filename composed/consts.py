@@ -48,7 +48,7 @@ should change depending on your sample size.
 
 """
 
-BIG_COMBO = 100
+BIG_COMBO = 15
 """Final combinatorial limiter. Ensures there arent over BIG_COMBO**(2)
 total partition rows.
 The squared comes from the fact there's group features, and covariate (usually

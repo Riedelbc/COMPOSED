@@ -80,6 +80,8 @@ class ComposedDataSource(object, metaclass=DataMetaInterface):
         var_names = [n for n in _features.columns if n.startswith(self._prefixes)]
         _covcols = [self.group]
         if self.cov:
+            # Always include the covariate in our vars
+            var_names = [self.cov] + var_names
             _covcols.append(self.cov)
         _covs = _features[_covcols]
         _subj_ids = _features[self.subj_id]
@@ -108,7 +110,6 @@ class ComposedDataSource(object, metaclass=DataMetaInterface):
                     feats.append(featname)
 
             _featsets[prefix] = pd.concat([_features[feats], _covs], axis=1)
-
 
         for prefix in _featsets:
             _fdata = {}
@@ -181,6 +182,12 @@ class ComposedDataSource(object, metaclass=DataMetaInterface):
         # Unfiltered
         self._x_names = _features.columns
         self._x = _features.as_matrix()
+
+        # Always have covariate in filtered features
+        if self.cov and self.cov not in features.columns:
+            features = pd.concat([features, _features[self.cov]], axis=1)
+        if self.cov and _test_features.shape[0] > 0 and self.cov not in test_features.columns:
+            test_features = pd.concat([test_features, _test_features[self.cov]], axis=1)
 
         # Filtered
         self.x_names = features.columns
@@ -369,12 +376,19 @@ class ComposedDataSource(object, metaclass=DataMetaInterface):
                     feat_sels.append((maic, _merge_sel[0, :]))
             feat_sels = sorted(feat_sels, key=lambda x: x[0])
             if len(feat_sels) > BIG_COMBO:
+                print("The number of merge partitions exceeding the AIC cutoff"
+                      " is greater than the permutation cutoff for grp={}."
+                      " Limiting len(feat_sels) from {} to {}"
+                      .format(grp, len(feat_sels), BIG_COMBO), flush=True)
                 feat_sels = feat_sels[:BIG_COMBO]
             fullperm.append((grp, grp_feats, feat_sels))
 
         combined_combo_sets = [list(range(len(x[2]))) for x in fullperm]
         combo_sets = list(itertools.product(*combined_combo_sets))
         partitions = np.zeros((len(combo_sets), train_features.shape[1]))
+        if self.cov:
+            # Always include the covariate on its own in the permutations
+            partitions[:, cov_idx] = cov_idx
         for i, combo in enumerate(combo_sets):
             for j, row in enumerate(combo):
                 _, grp_feats, feat_sels = fullperm[j]
@@ -382,6 +396,7 @@ class ComposedDataSource(object, metaclass=DataMetaInterface):
                 x_name_idxs = self.x_names.get_indexer(grp_feats)
                 partitions[i, x_name_idxs] = sel
         self.partitions = partitions
+
         return partitions
 
     def partition_names(self, partition_idx):

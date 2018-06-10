@@ -275,15 +275,14 @@ feature type will go into making the final merge list and thus
 creating the optimal merge partitions.
 
 
-The number of permutations for the first AIC run is equal
-to :math:`2^{l_m} - l_m` where :math:`l_m` is the initial number of features in
-the category. The subsequent two AIC runs look for new features to merge, 
-while maintaining those identified through the first AIC run. 
-The number of permutations for the second AIC run is equal
-to :math:`R*2^{l_r}` where :math:`R` is the number of saved merge sets
-from the first run, and :math:`l_r` is the number of values in a saved
-merge category. The number of permutation for the next run is the same
-as the second, except :math:`R` is the number of merge sets generated from the
+The number of permutations for the first AIC run is equal to :math:`2^{l_m} -
+l_m` where :math:`l_m` is the initial number of features in the category. The
+subsequent two AIC runs look for new features to merge, while maintaining those
+identified through the first AIC run.  The number of permutations for the second
+AIC run is equal to :math:`R*2^{l_r}` where :math:`R` is the number of saved
+merge sets from the first run, and :math:`l_r` is the number of values in a
+saved merge category. The number of permutation for the next run is the same as
+the second, except :math:`R` is the number of merge sets generated from the
 previous run only.
 
 An example second AIC run (starting with 6 features) might look like this::
@@ -299,18 +298,18 @@ And a third corresponding AIC run might then look like this::
    322311
    322131
 
-During each AIC run, the merge sets that are better than baseline are retained, 
-to be added to the final merge partition, with all subcategories for each 
-feature type. 
+During each AIC run, the merge sets that are better than baseline are retained,
+to be added to the final merge partition, with all subcategories for each
+feature type.
 
 The per-feature type optimal merge partitions are then combined into a
 full-dataset merge table by taking all permutations between each
 categories final merge lists. This combined merge partition table then
 serves as the input to the principle composed SVM algorithm.
 
-***************************
+**********************
 **TLDR Basic Summary**
-***************************
+**********************
 
    The first step of COMPOSED is feature selection, this is defined as follows:
 
@@ -319,46 +318,55 @@ serves as the input to the principle composed SVM algorithm.
       
       {f_1...f_N} > |t_{thresh}| ≤ max_{c}
          
-   Where f are the original MRI measures within each feature type (i.e. volume/thickness/surface area), 
-   separated by subcategory (i.e. features with a positive/negative association to disease), that are greater 
-   than the data-dependent optimal test statistic threshold. Max_c determines the maximum number of subcategory 
-   features to be used for each feature type, is user defined, and helps limit computational complexity.   
+   Where f are the original MRI measures within each feature type
+   (i.e. volume/thickness/surface area), separated by subcategory (i.e. features
+   with a positive/negative association to disease), that are greater than the
+   data-dependent optimal test statistic threshold. Max_c determines the maximum
+   number of subcategory features to be used for each feature type, is user
+   defined, and helps limit computational complexity.
       
-   The second step is a data reduction process completed by merging features. Given N subcategory features 
-   from step 1, up to N features will be merged together by averaging, creating 
-   one merge feature in place of the original N. There can be up to three non-overlapping 
-   merges within a set of N features. However, fewer than N features can be merged, leaving all other features 
-   in their original form. These merge sets are determined from the features remaining after 
-   step 1 and defined as:
+   The second step is a data reduction process completed by merging
+   features. Given N subcategory features from step 1, up to N features will be
+   merged together by averaging, creating one merge feature in place of the
+   original N. There can be up to three non-overlapping merges within a set of N
+   features. However, fewer than N features can be merged, leaving all other
+   features in their original form. These merge sets are determined from the
+   features remaining after step 1 and defined as:
    
    .. math::
       :label: merge_def
       
       set_{M_1...M_N} \rightarrow \!\, ϕ  ◦ P_{merge}(n,r)_{f_1...f_N} 
       
-   Where set M are the different merge sets within each subcategory, identified by permuting through merge combinations of the  
-   features selected through step 1. Only the optimal merge sets are retained for disease classification and are defined as 
-   follows:
+   Where set M are the different merge sets within each subcategory, identified
+   by permuting through merge combinations of the features selected through
+   step 1. Only the optimal merge sets are retained for disease classification
+   and are defined as follows:
 
    .. math::
       :label: merge_set_selection
       
       \forall \!\,\text{ }set_{M_1...M_N} \text{ where }AIC\text{ }set_{M_N} < AIC\text{ }f_{N}
    
-   Where each merge set is compared to the baseline AIC for that subcategory using
-   the original features (i.e. no merging has occured). Diagnosis is the dependent variable. Lower AIC values 
-   indicate better model fit and are kept. Finally, all optimal merge feature sets across 
-   features are combined into a merge table by taking all permutations between each final merge list across features. 
+   Where each merge set is compared to the baseline AIC for that subcategory
+   using the original features (i.e. no merging has occured). Diagnosis is the
+   dependent variable. Lower AIC values indicate better model fit and are
+   kept. Finally, all optimal merge feature sets across features are combined
+   into a merge table by taking all permutations between each final merge list
+   across features.
 
    .. math::
       :label: merge_set_to_partition
 
       P(n,r) = F \subseteq \!\,set_{M1...M_N} \text{} \rightarrow \!\, ϕ  ◦{f_1...f_N}
    
-   Here, P represents all permutations across all feature sets F. These are composed of all optimal merge sets M, which 
-   are merge transformations from the original features within each subcategory f. After splitting the data into 10 stratified 
-   train/test folds, these combinations across feature merge lists are used to find the highest performing combination, 
-   as measured by 10-times repeated nested cross-validation test accuracy, through a linear SVM classifier. Performance of all 
-   optimal combinations of feature merge lists are compared to baseline performances using all features 
-   and using only the features identified through feature selection (step 1) without any merges, to ensure 
-   improved performance using COMPOSED.     
+   Here, P represents all permutations across all feature sets F. These are
+   composed of all optimal merge sets M, which are merge transformations from
+   the original features within each subcategory f. After splitting the data
+   into 10 stratified train/test folds, these combinations across feature merge
+   lists are used to find the highest performing combination, as measured by
+   10-times repeated nested cross-validation test accuracy, through a linear SVM
+   classifier. Performance of all optimal combinations of feature merge lists
+   are compared to baseline performances using all features and using only the
+   features identified through feature selection (step 1) without any merges, to
+   ensure improved performance using COMPOSED.
