@@ -6,10 +6,10 @@ setup(
     packages=['composed'],
     url='',
     license='proprietary',
-    author='Gautam Prasad',
-    author_email='gprasad@usc.edu',
+    author='Brandy Riedel',
+    author_email='riedelbc@gmail.com',
     description='Runs the Classification Optimization with Merged Partitions Over SEx and Disease (COMPOSED)'
-                'algorithm by Brandy Lyjak, inspired by the EPIC algorithm by Gautam Prasad.',
+                'algorithm by Brandy Riedel, inspired by the EPIC algorithm by Gautam Prasad.',
     install_requires=["numpy",
                       "scikit-learn",
                       "scipy",
