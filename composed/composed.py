@@ -329,10 +329,10 @@ class Composed:
         self.data.load(self.info_table_name, self.holdout_table_name)
 
         print('Data size:\n\t{}\tparticipants\n\t{}\tfeatures (remaining after filter) per participant'
-              .format(self.data.x.shape[0], self.data.x.shape[1]),
+              .format(self.data.train_x.shape[0], self.data.train_x.shape[1]),
               file=self.log, flush=True)
 
-        grps, len_grps = np.unique(self.data.y, return_counts=True)
+        grps, len_grps = np.unique(self.data.train_y, return_counts=True)
         if len(grps) > 2:
             assert self.classifier_name.lower() in ('gbr', 'gradient boosting regressor'), \
                 "Can only have two subject groups, control==0, and diseased==1" \

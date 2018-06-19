@@ -1,5 +1,6 @@
 import copy
 import itertools
+import os
 
 import numpy as np
 import pandas as pd
@@ -49,9 +50,17 @@ class ComposedDataSource(object, metaclass=DataMetaInterface):
         self.kwargs = kwargs
 
         self.filepath = None
-        self.x = None
+        self._x_names = None
         self.x_names = None
-        self.y = None
+
+        self._train_x = None
+        self.train_x = None
+        self.train_y = None
+
+        self._test_x = None
+        self.test_x = None
+        self.test_y = None
+
         self.train_subj_ids = None
         self.test_subj_ids = None
 
@@ -59,57 +68,127 @@ class ComposedDataSource(object, metaclass=DataMetaInterface):
         if self.cov:
             self.x_sets['cov'] = {}
 
+        self.is_categorical = None
+
+        self.partitions = None
+
     def loadfile(self, info_table_name):
         # load csv file
         _features = pd.read_csv(info_table_name)
         return _features
 
     def load(self, info_table_name, holdout_table_name):
-        """Loads data from the initial data source(s).
+        """
+        Loads data from the initial data source(s).
 
         See :doc:`/composed` for details.
-
         """
-
         _features = self.loadfile(info_table_name)
+
+        # Ensure the loaded data matches our expectations of grp, cov, and
+        # feature prefixes
         expected = set(self.prefixes) | set([self.group, self.subj_id])
         if self.cov:
             expected.add(self.cov)
         assert expected.issubset([name.split("_")[0] for name in _features.columns])
-        self._prefixes = tuple(["{}_".format(pref) for pref in self.prefixes])
-        var_names = [n for n in _features.columns if n.startswith(self._prefixes)]
-        _covcols = [self.group]
-        if self.cov:
-            # Always include the covariate in our vars
-            var_names = [self.cov] + var_names
-            _covcols.append(self.cov)
-        _covs = _features[_covcols]
-        _subj_ids = _features[self.subj_id]
-        _features = _features[var_names]
-        _features = pd.DataFrame(preprocessing.RobustScaler().fit_transform(_features),
-                                  columns=var_names)
-        features = None
 
-        _test_features = None
-        if holdout_table_name is not None:
+        # Downselect data to the features starting with the feature prefixes
+        _prefixes = tuple(["{}_".format(pref) for pref in self.prefixes])
+        var_names = [n for n in _features.columns if n.startswith(_prefixes)]
+
+        # Always include the covariate in our vars
+        if self.cov:
+            var_names = [self.cov] + var_names
+
+        _x = pd.DataFrame(
+            preprocessing.RobustScaler().fit_transform(_features[var_names]),
+            columns=var_names
+        )
+        self._x_names = list(_x.columns.values)
+        _x = _x.as_matrix()
+
+        _y = np.array(_features[self.group])
+
+        # Ensure data is split into a train and test/holdout
+        # dataset. Test/holdout is used for final validation of the trained
+        # model.
+        if holdout_table_name is None:
+            # Split the dataset into training and holdout/testing
+            ss = StratifiedShuffleSplit(n_splits=1,
+                                        test_size=PREDICTION_HOLDOUT_RATIO,
+                                        random_state=self.composed.random_flag)
+            idxs = []
+            for train_idx, test_idx in ss.split(np.zeros(_x.shape[0]), _y):
+                idxs.append((train_idx, test_idx))
+            assert len(idxs) == 1
+            _train, _test = idxs[0]
+
+            self._train_x = _x[_train, :]
+            self.train_y = _y[_train]
+
+            self._test_x = _x[_test, :]
+            self.test_y = _y[_test]
+
+            _subj_ids = _features[self.subj_id].ravel()
+            self.test_subj_ids = _subj_ids[_test]
+            self.train_subj_ids = _subj_ids[_train]
+        else:
+            self._train_x = _x
+            self.train_y = _y
+            self.train_subj_ids = _features[self.subj_id].ravel()
+
+            # Load the supplied test features
             _test_features = self.loadfile(holdout_table_name)
-            self.test_y = _test_features[self.group].ravel()
-            self.test_subj_ids = _test_features[self.subj_id]
-            _test_features = _test_features[var_names]
-            _test_features = pd.DataFrame(
-                preprocessing.RobustScaler().fit_transform(_test_features),
+            self.test_y = np.array(_test_features[self.group])
+            self.test_subj_ids = _test_features[self.subj_id].ravel()
+
+            self._test_x = pd.DataFrame(
+                preprocessing.RobustScaler().fit_transform(_test_features[var_names]),
                 columns=var_names
             )
-            test_features = None
+            assert self._x_names == list(self._test_x.columns.values)
+            self._test_x = self._test_x.as_matrix()
 
+        self.is_categorical = len(set(self.train_y.flatten())) <= 10
+        corr_func = tdiff if self.is_categorical else zdiff
+        diff_threshold = self.composed.min_tdiff_thresh if self.is_categorical else \
+            self.composed.min_zdiff_thresh
+        print(
+            "It appears the group variable is {}, so using {} to calculate correlated features"
+            .format(
+                "categorical" if self.is_categorical else "continuous",
+                "tdiff" if self.is_categorical else "zdiff")
+        )
+
+        if self.cov:
+            _idx = self._x_names.index(self.cov) if self.cov else None
+            cov_dat = np.column_stack([self.train_y, self._train_x[:, _idx]])
+        else:
+            cov_dat = self.train_y
+
+        _group_idx = 0
+        _cov_idx = 1 if self.cov else None
+        _incr = 1
+        if self.cov:
+            _incr += 1
         _featsets = {}
-        for prefix in self._prefixes:
-            feats = []
-            for featname in _features.columns:
-                if featname.startswith(prefix):
-                    feats.append(featname)
+        for prefix in _prefixes:
+            feats = [featname for featname in self._x_names
+                     if featname.startswith(prefix)]
 
-            _featsets[prefix] = pd.concat([_features[feats], _covs], axis=1)
+            feat_idxs = [idx for idx, name in enumerate(self._x_names) if name in feats]
+
+            _featsets[prefix] = (feats, np.column_stack([cov_dat, self._train_x[:, feat_idxs]]))
+
+        # Analyze features in order to create filtered dataset. The filter is
+        # based on correlation strength between features and the self.group
+        # variable.
+        #
+        # Need to ensure this filtered dataset is only calculated
+        # based on the training data!
+        self.x_names = []
+        if self.cov:
+            self.x_names.append(self.cov)
 
         for prefix in _featsets:
             _fdata = {}
@@ -117,109 +196,53 @@ class ComposedDataSource(object, metaclass=DataMetaInterface):
                 self.x_sets[grp][prefix] = {}
                 _fdata[grp] = []
 
-            is_categorical = set(_featsets[prefix][self.group]).issubset(set(range(10)))
-            corr_func = tdiff if is_categorical else zdiff
-            diff_threshold = self.composed.min_tdiff_thresh if is_categorical else \
-                self.composed.min_zdiff_thresh
-
-            for featname in _featsets[prefix].columns:
-                if featname in _covs.columns:
-                    continue
-                res = corr_func(_featsets[prefix], featname, self.group, self.cov)
-                _fdata['grp'].append((featname, res[0]))
+            featnames, featdat = _featsets[prefix]
+            assert len(featnames) + _incr == featdat.shape[1]
+            for feat_idx, featname in enumerate(featnames):
+                grp_corr, cov_corr = corr_func(featdat, feat_idx + _incr, _group_idx, _cov_idx)
+                _fdata['grp'].append((featname, grp_corr))
                 if self.cov:
-                    _fdata['cov'].append((featname, res[1]))
+                    _fdata['cov'].append((featname, cov_corr))
 
             title = "Covariate Diff Results"
             print(title)
             print("-" * len(title))
             print("")
-            print(
-                "It appears the group variable is {}, so using {} to calculate correlated features"
-                .format(
-                    "categorical" if is_categorical else "continuous",
-                    "tdiff" if is_categorical else "zdiff")
-                )
             print("")
             for grp, _fdats in _fdata.items():
                 _fdats = sorted(_fdats, key=lambda x: x[1])
                 for _name, diff in _fdats:
                     print("{}_{}\t\t{}".format(grp, _name, diff))
             print("\n\n")
+
+            # Filter the features based on high positive and negative correlations
             for grp in self.x_sets:
-                curset = self.x_sets[grp][prefix]
                 _fdata[grp] = sorted(_fdata[grp], key=lambda x: x[1])
+
                 pos_diff = [t[0] for t in _fdata[grp] if t[1] >= diff_threshold]
                 if len(pos_diff) > self.composed.max_combinatorial:
                     pos_diff = pos_diff[-int(self.composed.max_combinatorial):]
-                curset['pos'] = pos_diff
+                if pos_diff:
+                    self.x_names.extend(pos_diff)
+                    self.x_sets[grp][prefix]['pos'] = pos_diff
 
                 neg_diff = [t[0] for t in _fdata[grp] if t[1] <= - diff_threshold]
                 if len(neg_diff) > self.composed.max_combinatorial:
                     neg_diff = neg_diff[:int(self.composed.max_combinatorial)]
-                curset['neg'] = neg_diff
+                if neg_diff:
+                    self.x_names.extend(neg_diff)
+                    self.x_sets[grp][prefix]['neg'] = neg_diff
 
-                for _dir, _diff in curset.items():
-                    if not _diff:
-                        continue
-                    featnames = ["{}_{}".format(grp, fname) for fname in _diff]
-                    self.x_sets[grp][prefix][_dir] = featnames
-                    res = _features[_diff]
-                    res.columns = featnames
-                    if features is None:
-                        features = res
-                    else:
-                        features = pd.concat([features, res], axis=1)
 
-                    if _test_features is not None and _diff:
-                        test_res = _test_features[_diff]
-                        test_res.columns = featnames
-                        if test_features is None:
-                            test_features = test_res
-                        else:
-                            test_features = pd.concat([test_features, test_res], axis=1)
+        # Downselect train_x and test_x to the filtered features
+        _train_indices = [idx for idx, name in enumerate(self._x_names) if name in self.x_names]
+        self.train_x = self._train_x[:, _train_indices]
+        _test_indices = [idx for idx, name in enumerate(self._x_names) if name in self.x_names]
+        self.test_x = self._test_x[:, _test_indices]
 
-        # Unfiltered
-        self._x_names = _features.columns
-        self._x = _features.as_matrix()
+        # Ensure training and test/holdout have the same columns
+        assert self.train_x.shape[1] and self.train_x.shape[1] == self.test_x.shape[1]
 
-        # Always have covariate in filtered features
-        if self.cov and self.cov not in features.columns:
-            features = pd.concat([features, _features[self.cov]], axis=1)
-        if self.cov and _test_features.shape[0] > 0 and self.cov not in test_features.columns:
-            test_features = pd.concat([test_features, _test_features[self.cov]], axis=1)
-
-        # Filtered
-        self.x_names = features.columns
-        self.x = features.as_matrix()
-        self.y = np.array(_covs[[self.group]])
-        self.is_categorical = len(set(self.y.flatten())) <= 10
-
-        if holdout_table_name is None:
-            ss = StratifiedShuffleSplit(n_splits=1, test_size=PREDICTION_HOLDOUT_RATIO,
-                                        random_state=self.composed.random_flag)
-            idxs = []
-            for train_idx, test_idx in ss.split(np.zeros(self.x.shape[0]), self.y):
-                idxs.append((train_idx, test_idx))
-            assert len(idxs) == 1
-            _train, _test = idxs[0]
-            self.train_x = self.x[_train, :]
-            self._train_x = self._x[_train, :]
-            self.train_y = self.y[_train, :].ravel()
-            self.test_x = self.x[_test, :]
-            self._test_x = self._x[_test, :]
-            self.test_y = self.y[_test, :].ravel()
-
-            self.test_subj_ids = _subj_ids[_test]
-            self.train_subj_ids = _subj_ids[_train]
-        else:
-            self.train_x = self.x
-            self._train_x = self._x
-            self.train_y = self.y.ravel()
-            self.train_subj_ids = _subj_ids
-
-            self.test_x = test_features.as_matrix()
-            self._test_x = _test_features
 
     def create_partitions(self):
         """Takes feature type into account while performing merge partitioning.
@@ -235,7 +258,7 @@ class ComposedDataSource(object, metaclass=DataMetaInterface):
         train_features = self.train_x
         groups = {'grp': self.train_y}
         if self.cov:
-            cov_idx = self.x_names.get_indexer([self.cov])
+            cov_idx = [idx for idx, name in enumerate(self.x_names) if name == self.cov]
             groups['cov'] = self.train_x[:, cov_idx]
 
         fullperm = []
@@ -246,7 +269,7 @@ class ComposedDataSource(object, metaclass=DataMetaInterface):
                     featlist = self.x_sets[grp][prefix][_dir]
                     if not featlist:
                         continue
-                    feat_idxs = self.x_names.get_indexer(featlist)
+                    feat_idxs = [idx for idx, name in enumerate(self.x_names) if name in featlist]
                     t_feats = train_features[:,feat_idxs]
                     base_aic = aic(groups[grp], t_feats)
                     min_aic = base_aic
@@ -270,7 +293,7 @@ class ComposedDataSource(object, metaclass=DataMetaInterface):
                         mscore = mscore[:int(self.composed.max_merges)]
                     print("Group {}_{}{}: mscore1 len: {}"
                           .format(grp, prefix, _dir, len(mscore) or 1), flush=True)
-                    min_aic = mscore and mscore[0][0] or min_aic
+                    min_aic = mscore[0][0] if mscore else min_aic
                     # Second round
                     mscore2 = []
                     _seensets = []
@@ -333,7 +356,7 @@ class ComposedDataSource(object, metaclass=DataMetaInterface):
                        for __dir in self.x_sets[grp][pref]
                        for name in self.x_sets[grp][pref][__dir]]
             feat_sels = []
-            grp_base_idxs = self.x_names.get_indexer(grp_feats)
+            grp_base_idxs = [idx for idx, name in enumerate(self.x_names) if name in grp_feats]
             grp_base = train_features[:, grp_base_idxs]
             grp_base_aic = aic(groups['grp'], grp_base)
             _merge_sel = np.zeros((1, len(grp_feats)))
@@ -349,7 +372,7 @@ class ComposedDataSource(object, metaclass=DataMetaInterface):
                     m2 = [m for m, k in enumerate(mset) if k == -2]
                     m3 = [m for m, k in enumerate(mset) if k == -3]
                     featlist = self.x_sets[grp][prefix][_dir]
-                    x_name_idxs = self.x_names.get_indexer(featlist)
+                    x_name_idxs = [idx for idx, name in enumerate(self.x_names) if name in featlist]
                     _merge_idxs = copy.copy(x_name_idxs)
                     if m1:
                         m_idx = x_name_idxs[m1[0]]
@@ -363,8 +386,8 @@ class ComposedDataSource(object, metaclass=DataMetaInterface):
                         m_idx = x_name_idxs[m3[0]]
                         for _idx in m3:
                             _merge_idxs[_idx] = m_idx
-                    for idx, _x_name_idx in enumerate(_merge_idxs):
-                        fname = featlist[idx]
+                    for __idx, _x_name_idx in enumerate(_merge_idxs):
+                        fname = featlist[__idx]
                         _mname = self.x_names[_x_name_idx]
                         _grp_feat_idx = grp_feats.index(fname)
                         _grp_mname_idx = grp_feats.index(_mname)
@@ -393,7 +416,7 @@ class ComposedDataSource(object, metaclass=DataMetaInterface):
             for j, row in enumerate(combo):
                 _, grp_feats, feat_sels = fullperm[j]
                 _, sel = feat_sels[row]
-                x_name_idxs = self.x_names.get_indexer(grp_feats)
+                x_name_idxs = [idx for idx, name in enumerate(self.x_names) if name in grp_feats]
                 partitions[i, x_name_idxs] = sel
         self.partitions = partitions
 
@@ -449,8 +472,8 @@ class Connectomics(ComposedDataSource):
                     row[idx] = subj_data[i,j]
                     idx += 1
 
-        np.savetxt(os.path.join(info_table_name, 'connectomics_combined.csv'), self.x, delimiter=', ', header=self.x_names)
-        _feats = pd.data_frame(features, columns = feature_names)
+        np.savetxt(os.path.join(info_table_name, 'connectomics_combined.csv'), self.train_x, delimiter=', ', header=self.x_names)
+        _feats = pd.DataFrame(features, columns = feature_names)
         _feats = pd.concat([_feats, vector_info.Group], axis=1)
         return _feats
 
