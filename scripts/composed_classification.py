@@ -14,7 +14,7 @@ max_merges = 8.0
 min_diff_thresh = 1.1
 
 args = {'info_table_name': os.path.join(base, 'composed_linear_testing.csv'),
-        'holdout_table_name': os.path.join(base, 'composed_linear_validation.csv'),
+        #'holdout_table_name': os.path.join(base, 'composed_linear_validation.csv'),
         'random_flag': 1234,
         'output_dir': os.path.join('/tmp', results_dir),
         'logname': os.path.join('/tmp', results_dir, logname),
