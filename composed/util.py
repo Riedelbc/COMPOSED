@@ -71,7 +71,7 @@ def tdiff(dataset, feat_col, dx_col, sex_col=None):
     sex_tdiff = None
 
     if sex_col is not None:
-        m_feats = dataset[dataset[sex_col] == m]
+        m_feats = dataset[dataset[:, sex_col] == m, :]
         m_cn_feats = m_feats[m_feats[:, dx_col] == cn]
         m_cn_mean = np.mean(m_cn_feats[:, feat_col])
         m_cn_sigma = np.std(m_cn_feats[:, feat_col])
@@ -81,7 +81,7 @@ def tdiff(dataset, feat_col, dx_col, sex_col=None):
         m_dx_sigma = np.std(m_dx_feats[:, feat_col])
         m_dx_n = m_dx_feats.shape[0]
 
-        f_feats = dataset[dataset[sex_col] == f]
+        f_feats = dataset[dataset[:, sex_col] == f, :]
         f_cn_feats = f_feats[f_feats[:, dx_col] == cn]
         f_cn_mean = np.mean(f_cn_feats[:, feat_col])
         f_cn_sigma = np.std(f_cn_feats[:, feat_col])
@@ -110,11 +110,11 @@ def zdiff(dataset, feat_col, dx_col, sex_col=None):
     z = 1 / (1 - grp_diff)
     sexz = None
     if sex_col is not None:
-        mdata = dataset[dataset[sex_col] == m]
+        mdata = dataset[dataset[:, sex_col] == m, :]
         mz = distcorr(mdata[:, feat_col], mdata[:, dx_col])
         mn = mdata.shape[0]
 
-        fdata = dataset[dataset[sex_col] == f]
+        fdata = dataset[dataset[:, sex_col] == f, :]
         fz = distcorr(fdata[:, feat_col], fdata[:, dx_col])
         fn = fdata.shape[0]
 

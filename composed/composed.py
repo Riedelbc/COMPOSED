@@ -71,7 +71,8 @@ class Composed:
     """
 
     def __init__(self, args):
-        """Initialize Composed by inputting the desired run parameters within the args
+        """
+        Initialize Composed by inputting the desired run parameters within the args
         dictionary. Expected parameters are as follows:
 
         info_table_name: A CSV with your covariates and file locations
@@ -128,6 +129,12 @@ class Composed:
         max_merges: Max returned combinatorial of merges over a feature type by
            group (DX/cov) to find the optimal merges within that feature type.
 
+        alpha: default 0.1. Use the alpha% quantile in loss in order to weight
+            towards overpredicting Y.  calculates loss based on huber loss of
+            the alpha quantile, where the quantile array is taken from y_actual
+            - y_pred. Therefore this weights towards negative y_actual - y_pred
+            results.
+
         logname: What to name the logfile in the output dir.
 
         min_diff_thresh: This threshold is the minimum value taken for
@@ -140,7 +147,6 @@ class Composed:
         save_holdout_subject_results: Boolean, default False. Whether to
            create a csv file that stores the predictions from the final model
            for each holdout subject.
-
         """
 
         self.info_table_name = args['info_table_name']
@@ -157,6 +163,7 @@ class Composed:
         self.data_type = args.get('data_type', 'connectomics')
         self.data_type_args = args.get('data_type_args', {})
         self.c_stat = args.get('c_stat', 1)
+        self.alpha = args.get('alpha', 0.1)
         self.max_combinatorial = args.get('max_combinatorial', MAX_COMBINATORIAL)
         self.max_merges = args.get('max_merges', MAX_MERGES)
         self.min_tdiff_thresh = args.get('min_diff_thresh', args.get('min_tdiff_thresh', MIN_DIFF_THRESH))
@@ -289,19 +296,7 @@ class Composed:
                                             max_features=0.65,
                                             max_leaf_nodes=None,
                                             min_impurity_decrease=0.0000001,
-                                            alpha=0.1,  # Use the alpha% quantile
-                                                        # in loss in order to
-                                                        # weight towards
-                                                        # overpredicting Y.
-                                                        # calculates loss based
-                                                        # on huber loss of the
-                                                        # alpha quantile, where
-                                                        # the quantile array is
-                                                        # taken from y_actual -
-                                                        # y_pred. Therefore this
-                                                        # weights towards
-                                                        # negative y_actual -
-                                                        # y_pred results.
+                                            alpha=self.alpha,
                                             init=None,
                                             verbose=0,
                                             warm_start=False,

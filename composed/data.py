@@ -96,14 +96,30 @@ class ComposedDataSource(object, metaclass=DataMetaInterface):
         _prefixes = tuple(["{}_".format(pref) for pref in self.prefixes])
         var_names = [n for n in _features.columns if n.startswith(_prefixes)]
 
-        # Always include the covariate in our vars
-        if self.cov:
-            var_names = [self.cov] + var_names
+        if len(set(var_names)) != len(var_names):
+            firsts = []
+            dupes = []
+            for var_name in var_names:
+                if var_name not in firsts:
+                    firsts.append(var_name)
+                else:
+                    dupes.append(var_name)
+            raise Exception(
+                "Uh oh! This data contains duplicate variable IDs. Please"
+                " find and correct columns with the following names: {}"
+                .format(dupes)
+            )
 
         _x = pd.DataFrame(
             preprocessing.RobustScaler().fit_transform(_features[var_names]),
             columns=var_names
         )
+
+        # Always include the covariate in our vars
+        if self.cov:
+            var_names = [self.cov] + var_names
+            _x[self.cov] = _features[self.cov]
+
         self._x_names = list(_x.columns.values)
         _x = _x.as_matrix()
 
@@ -142,10 +158,18 @@ class ComposedDataSource(object, metaclass=DataMetaInterface):
             self.test_y = np.array(_test_features[self.group])
             self.test_subj_ids = _test_features[self.subj_id].ravel()
 
+            if self.cov:
+                var_names.remove(self.cov)
+
             self._test_x = pd.DataFrame(
                 preprocessing.RobustScaler().fit_transform(_test_features[var_names]),
                 columns=var_names
             )
+
+            if self.cov:
+                var_names = [self.cov] + var_names
+                self._test_x[self.cov] = _test_features[self.cov]
+
             assert self._x_names == list(self._test_x.columns.values)
             self._test_x = self._test_x.as_matrix()
 
@@ -221,16 +245,20 @@ class ComposedDataSource(object, metaclass=DataMetaInterface):
 
                 pos_diff = [t[0] for t in _fdata[grp] if t[1] >= diff_threshold]
                 if len(pos_diff) > self.composed.max_combinatorial:
-                    pos_diff = pos_diff[-int(self.composed.max_combinatorial):]
+                    pos_diff = pos_diff[-int(self.composed.max_combinatorial):len(pos_diff)]
                 if pos_diff:
-                    self.x_names.extend(pos_diff)
+                    assert len(pos_diff) <= self.composed.max_combinatorial
+                    newnames = [name for name in pos_diff if name not in self.x_names]
+                    self.x_names.extend(newnames)
                     self.x_sets[grp][prefix]['pos'] = pos_diff
 
                 neg_diff = [t[0] for t in _fdata[grp] if t[1] <= - diff_threshold]
                 if len(neg_diff) > self.composed.max_combinatorial:
-                    neg_diff = neg_diff[:int(self.composed.max_combinatorial)]
+                    neg_diff = neg_diff[0:int(self.composed.max_combinatorial)]
                 if neg_diff:
-                    self.x_names.extend(neg_diff)
+                    assert len(neg_diff) <= self.composed.max_combinatorial
+                    newnames = [name for name in neg_diff if name not in self.x_names]
+                    self.x_names.extend(newnames)
                     self.x_sets[grp][prefix]['neg'] = neg_diff
 
 
