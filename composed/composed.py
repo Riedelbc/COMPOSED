@@ -18,12 +18,13 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import GradientBoostingRegressor
 
 from composed.data import ComposedDataSource
+from composed.classifiers import BiasCorrectedGradientBoostingRegressor
 from composed.util import merge_data, measure_performance, partition_matrix
 from composed.consts import (MAX_COMBINATORIAL, MAX_MERGES, MIN_DIFF_THRESH,
                              NUM_PERFORMANCE_METRICS, NUM_GBM_PERFORMANCE_METRICS)
 
 def pool_evaluate(args):
-    repeat, num_folds, num_metrics, groups, _features, opt_idx, partitions, is_categorical, classifier, names = args
+    repeat, num_folds, num_metrics, groups, _features, opt_idx, partitions, is_categorical, classifier, names, random_state = args
 
     print("Repeat {}: Evaluating {} partitions in {} folds"
           .format(repeat, partitions.shape[0], num_folds),
@@ -32,7 +33,7 @@ def pool_evaluate(args):
     partitions_performance = np.zeros((num_folds, partitions.shape[0], num_metrics))
 
     if is_categorical:
-        folds = StratifiedKFold(groups, int(num_folds), shuffle=True)
+        folds = StratifiedKFold(groups, int(num_folds), shuffle=True, random_state=random_state)
     else:
         kf = KFold(int(num_folds), shuffle=True)
         folds = kf.split(groups)
@@ -257,7 +258,8 @@ class Composed:
                         self.partitions,
                         self.data.is_categorical,
                         self.get_classifier(),
-                        self.data.partition_names(x)) for x in range(self.num_folds)]
+                        self.data.partition_names(x),
+                        self.random_flag + x) for x in range(self.num_folds)]
 
             with Pool(processes=10) as pool:
                 self.best_performances.extend(pool.map(pool_evaluate, arglist))
@@ -281,27 +283,30 @@ class Composed:
             clf = LinearDiscriminantAnalysis()
         elif self.classifier_name == 'LR':
             clf = LogisticRegression()
-        elif self.classifier_name.lower() == 'gradient boosting regressor' or \
-             self.classifier_name.lower() == "gbr":
+        elif self.classifier_name.lower().endswith('gradient boosting regressor') or \
+             self.classifier_name.lower().endswith("gbr"):
+            clf_cls = GradientBoostingRegressor
+            if self.classifier_name.lower().startswith(("bias corrected", "bc")):
+                clf_cls = BiasCorrectedGradientBoostingRegressor
             # See http://scikit-learn.org/stable/modules/generated/sklearn.ensemble.GradientBoostingRegressor.html
-            clf = GradientBoostingRegressor(loss='huber',
-                                            learning_rate=self.learning_rate,
-                                            n_estimators=self.n_estimators,
-                                            max_depth=self.max_depth, # Needs to be high 5+ for ROI/brain distribution consideratons
-                                            criterion='friedman_mse',
-                                            min_samples_split=15,
-                                            min_samples_leaf=5,
-                                            min_weight_fraction_leaf=0,
-                                            subsample=0.95, # High to encourage sampling across all ages
-                                            max_features=0.65,
-                                            max_leaf_nodes=None,
-                                            min_impurity_decrease=0.0000001,
-                                            alpha=self.alpha,
-                                            init=None,
-                                            verbose=0,
-                                            warm_start=False,
-                                            random_state=1234,
-                                            presort='auto')
+            clf = clf_cls(loss='huber',
+                          learning_rate=self.learning_rate,
+                          n_estimators=self.n_estimators,
+                          max_depth=self.max_depth, # Needs to be high 5+ for ROI/brain distribution consideratons
+                          criterion='friedman_mse',
+                          min_samples_split=15,
+                          min_samples_leaf=5,
+                          min_weight_fraction_leaf=0,
+                          subsample=0.95, # High to encourage sampling across all ages
+                          max_features=0.65,
+                          max_leaf_nodes=None,
+                          min_impurity_decrease=0.0000001,
+                          alpha=self.alpha,
+                          init=None,
+                          verbose=0,
+                          warm_start=False,
+                          random_state=1234,
+                          presort='auto')
 
         return clf
 
@@ -329,7 +334,7 @@ class Composed:
 
         grps, len_grps = np.unique(self.data.train_y, return_counts=True)
         if len(grps) > 2:
-            assert self.classifier_name.lower() in ('gbr', 'gradient boosting regressor'), \
+            assert self.classifier_name.lower().endswith(('gbr', 'gradient boosting regressor')), \
                 "Can only have two subject groups, control==0, and diseased==1" \
                 " unless you use a Gradient boosting model"
 

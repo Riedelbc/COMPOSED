@@ -1,5 +1,5 @@
 # Plots
-base <- "/media/alyjak/7CA27419A273D65C/BrainAge_Expanded_ADNI1_n_ADNI2_n_LifspanBrain_n_Oasis/outputs20180723_2/"
+base <- "/media/alyjak/7CA27419A273D65C/BrainAge_UKBB_2/outputs20180826/"
 dat <- read.csv(file.path(base, "Averaged_Age.csv"))
 outdir <- file.path(base, "BPAD_outdir")
 dir.create(outdir, showWarnings = FALSE)
@@ -22,16 +22,16 @@ library(easyGgplot2)
 # BrainAge_Expanded_maxComb16_learningRate0.08_minZDiff1.05_maxDepth8
 
 for (pname in names(dat)){
-    if (!startsWith(pname, "BrainAge_Expanded_maxComb")){
+    if (!startsWith(pname, "BrainAge_maxComb")){
         next
    }
     print(paste0("Calculating BPAD for ", pname))
     ## Change the Predicted.Age pointer
     dat$Predicted.Age <- dat[[pname]]
-    dat$BPAD <- dat$Predicted.Age - dat$Actual.Age
+    dat$BPAD <- dat$Predicted.Age - dat$Age
     
     
-    Res_diff_plot = data.frame(Group = dat$Training,
+    Res_diff_plot = data.frame(Group = dat$Optimal_training,
                                Predicted_vs_Chronological = dat$BPAD)
 
     plt <- ggplot2.histogram(data=Res_diff_plot, xName='Predicted_vs_Chronological',
@@ -54,7 +54,7 @@ for (pname in names(dat)){
     }
     
     # Example data
-    actual <- dat$Actual.Age
+    actual <- dat$Age
     predicted <- dat$Predicted.Age
     
     # Calculate error

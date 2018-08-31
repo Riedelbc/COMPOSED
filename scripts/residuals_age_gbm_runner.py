@@ -5,18 +5,18 @@ from multiprocessing import Pool
 from composed import Composed
 
 logname = 'Brain_Age.log'
-data_name = "BrainAge_Expanded"
-base = '/media/alyjak/7CA27419A273D65C/BrainAge_Expanded_ADNI1_n_ADNI2_n_LifspanBrain_n_Oasis/'
+data_name = "BrainAge"
+base = '/media/alyjak/7CA27419A273D65C/BrainAge_UKBB_2'
 
-max_combinatorial_array=(16, ) #4, 16)
-learning_rate_array=(0.01, 0.04, 0.05, ) # 6, ) #0.08) # 0.06, 0.08, .1, 0.12, 0.05)
-min_zdiff_thresh_array=(1.12, ) #1.12) # 1.02, 1.1)
+max_combinatorial_array=(16, )
+learning_rate_array=(0.08,) #, 0.05, 0.1)
+min_zdiff_thresh_array=(1.10, ) #, 1.11, 1.15)
 max_depth_array=(8, ) #, 10)
-alpha_array = (0.95,) # 0.9)
+alpha_array = (0.8, ) #0.95, 0.99)
 
 max_merges = 8.0
 min_tdiff_thresh = 1.08
-n_estimators = 80
+n_estimators = 100
 
 job_list = []
 for _max_combinatorial in max_combinatorial_array:
@@ -27,7 +27,7 @@ for _max_combinatorial in max_combinatorial_array:
                     outdirname = "{}_maxComb{}_learningRate{}_minZDiff{}_maxDepth{}_alpha{}".format(
                         data_name, _max_combinatorial,  _learning_rate, _min_zdiff_thresh, _max_depth, _alpha
                     )
-                    out_dir = os.path.join(base, 'outputs20180723_2', outdirname)
+                    out_dir = os.path.join(base, 'outputs20180826', outdirname)
                     if not os.path.exists(out_dir):
                         os.makedirs(out_dir)
                     job_list.append({'max_combinatorial': _max_combinatorial,
@@ -35,19 +35,19 @@ for _max_combinatorial in max_combinatorial_array:
                                      'min_zdiff_thresh': _min_zdiff_thresh,
                                      'max_depth': _max_depth,
                                      'alpha': _alpha,
-                                     'info_table_name': os.path.join(base, 'inputs', '{}_Training.csv'.format(data_name)),
-                                     'holdout_table_name': os.path.join(base, 'inputs', '{}_Testing.csv'.format(data_name)),
+                                     'info_table_name': os.path.join(base, 'inputs', '{}_Training_Updated2.csv'.format(data_name)),
+                                     'holdout_table_name': os.path.join(base, 'inputs', '{}_Testing_Updated2.csv'.format(data_name)),
                                      'random_flag': 1234,
                                      'output_dir': out_dir,
                                      'logname': os.path.join(out_dir, logname),
                                      'num_repeats': 10,
                                      'num_folds': 10,
-                                     'classifier_name': "Gradient Boosting Regressor",
+                                     'classifier_name': "Bias Corrected Gradient Boosting Regressor",
                                      'data_type': 'freesurfer',
                                      'n_estimators': n_estimators,
                                      'ncpus': 20,
                                      'data_type_args': {
-                                         'prefixes': ["Thk", "SA", "VL"],
+                                         'prefixes': ["Thk", "SA", "VL", "Composite"],
                                          'group': 'Age',
                                          'covariate': 'Sex',
                                      },
