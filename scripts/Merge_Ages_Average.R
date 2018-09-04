@@ -12,26 +12,22 @@ for (subdir in subpaths){
           print("Uh Oh, this repeat does not have the expected columns. Help!")
           browser()
       }
-      dats$Actual.Age <- NULL
       if (is.null(df)){
           df <- dats
       } else {
+          dats$Actual.Age <- NULL
           df <- merge(x=df, y=dats, by="Subject.ID", all=TRUE, suffixes=c('', idx))
       }
   }
-  if (!"Subject.ID" == names(df)[1]){
-      print("Uh oh, why isn't subject ID the first column?")
-      browser()
-  }
   if (is.null(combined)){
-    combined <- data.frame(RID=df$Subject.ID)
+    combined <- data.frame(RID=df$Subject.ID, Actual.Age=df$Actual.Age)
   }
-  combined[[subdir]] <- rowMeans(df[,2:ncol(df)])
+  combined[[subdir]] <- rowMeans(df[,!(names(df) %in% c("Subject.ID", "Actual.Age"))])
 }
 
 ## Get DX and actual age
 pheno <- read.csv(file.path(base.path, '..', 'inputs', 'subj_pheno.csv'),
                   header=TRUE, sep=",")
 
-combined <- merge(combined, pheno, by="RID")
+combined <- merge(combined, pheno, all=TRUE, by="RID")
 write.csv(combined, file.path(base.path, "Averaged_Age.csv"), row.names = F)
